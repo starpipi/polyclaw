@@ -101,6 +101,72 @@ uv run python scripts/polyclaw.py wallet status
 uv run python scripts/polyclaw.py buy <market_id> YES 50
 ```
 
+## Example Prompts
+
+Natural language prompts you can use with OpenClaw:
+
+### 1. Browse Trending Markets
+```
+What's trending on Polymarket?
+```
+Returns market IDs, questions, prices, and volume.
+
+### 2. Get Market Details
+```
+Show me details for market <market_id>
+```
+Use the market ID from Polymarket URL or from the trending markets response above.
+
+Returns full market info with link to Polymarket.
+
+### 3. Check Wallet Status
+```
+What's my PolyClaw wallet balance?
+```
+Shows address, POL balance (for gas), and USDC.e balance.
+
+### 4. Direct Trading
+If you have your own conviction on a market:
+```
+Buy $50 YES on market <market_id>
+```
+Executes split + CLOB flow and records position.
+
+### 5. Hedge Discovery Flow
+Find LLM-analyzed arbitrage opportunities:
+```
+Find me some hedging opportunities on Polymarket
+```
+or more specifically:
+```
+Run hedge scan limit 10
+```
+> **Note:** This takes a few minutes. The skill fetches open markets and sends pairs to the LLM for logical implication analysis.
+
+Review the results — you'll see coverage tiers (T1 = 95%+, T2 = 90-95%, T3 = 85-90%) and the market pairs where you can take hedged positions.
+
+### 6. Check Positions
+```
+Show my PolyClaw positions
+```
+Lists open positions with entry price, current price, and P&L.
+
+### 7. Sell Early
+To exit a position before the market resolves:
+```
+Sell my YES position on market <market_id>
+```
+Sells your tokens on the CLOB order book at current market price.
+
+### Full Flow Example
+
+1. **"What's trending on Polymarket?"** → Get market IDs
+2. **"Run hedge scan limit 10"** → Wait for LLM analysis
+3. Review hedge opportunities with coverage tiers
+4. **"Buy $25 YES on market abc123"** → Take position on target market
+5. **"Buy $25 NO on market xyz789"** → Take position on covering market
+6. **"Show my PolyClaw positions"** → Verify entries and track P&L
+
 ## Environment Variables
 
 | Variable | Required | Description |
