@@ -8,7 +8,7 @@ Browse prediction markets, execute trades on-chain, and discover hedging opportu
 
 ## Features
 
-### Market Browsing
+### Market browsing
 - `polyclaw markets trending` — Top markets by 24h volume
 - `polyclaw markets search "query"` — Search markets by keyword
 - `polyclaw market <id>` — Market details with prices
@@ -18,16 +18,16 @@ Browse prediction markets, execute trades on-chain, and discover hedging opportu
 - `polyclaw buy <market_id> NO <amount>` — Buy NO position
 - Split + CLOB execution (split USDC → YES+NO, sell unwanted side)
 
-### Position Tracking
+### Position tracking
 - `polyclaw positions` — List open positions with live P&L
 - `polyclaw position <id>` — Detailed position view
 - Positions tracked locally in `~/.openclaw/polyclaw/positions.json`
 
-### Wallet Management
+### Wallet management
 - `polyclaw wallet status` — Show address, POL/USDC.e balances
 - `polyclaw wallet approve` — Set Polymarket contract approvals (one-time)
 
-### Hedge Discovery
+### Hedge discovery
 - `polyclaw hedge scan` — Scan trending markets for hedging opportunities
 - `polyclaw hedge scan --query "topic"` — Scan markets matching a query
 - `polyclaw hedge analyze <id1> <id2>` — Analyze specific market pair
@@ -36,11 +36,11 @@ Uses LLM-powered contrapositive logic to find covering portfolios. Only logicall
 
 **Coverage tiers:** T1 (≥95%), T2 (90-95%), T3 (85-90%)
 
-## Quick Start
+## Quick start
 
-### 1. Install Skill
+### 1. Install skill
 
-**Option A: Install from ClawHub (Recommended)**
+**Option A: Install from ClawHub (recommended)**
 
 ```bash
 clawhub install polyclaw
@@ -56,7 +56,7 @@ cd ~/.openclaw/skills/polyclaw
 uv sync
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure environment variables
 
 Add the following to your `openclaw.json` under `skills.entries.polyclaw.env`:
 
@@ -72,11 +72,11 @@ Add the following to your `openclaw.json` under `skills.entries.polyclaw.env`:
 }
 ```
 
-**Security Warning:** Keep only small amounts in this wallet. Withdraw regularly to a secure wallet.
+**Security warning:** Keep only small amounts in this wallet. Withdraw regularly to a secure wallet.
 
 > **Looking for standalone CLI usage?** This skill is designed for OpenClaw. For standalone CLI usage without OpenClaw, see [polymarket-alpha-bot](https://github.com/chainstacklabs/polymarket-alpha-bot).
 
-### 3. First-Time Setup (Required for Trading)
+### 3. First-time setup (required for trading)
 
 Before your first trade, set Polymarket contract approvals (one-time, costs ~0.01 POL in gas):
 
@@ -86,7 +86,7 @@ uv run python scripts/polyclaw.py wallet approve
 
 This submits 6 approval transactions to Polygon. You only need to do this once per wallet.
 
-### 4. Run Commands
+### 4. Run commands
 
 ```bash
 # Browse markets
@@ -101,17 +101,17 @@ uv run python scripts/polyclaw.py wallet status
 uv run python scripts/polyclaw.py buy <market_id> YES 50
 ```
 
-## Example Prompts
+## Example prompts
 
 Natural language prompts you can use with OpenClaw:
 
-### 1. Browse Trending Markets
+### 1. Browse trending markets
 ```
 What's trending on Polymarket?
 ```
 Returns market IDs, questions, prices, and volume.
 
-### 2. Get Market Details
+### 2. Get market details
 ```
 Show me details for market <market_id>
 ```
@@ -119,20 +119,20 @@ Use the market ID from Polymarket URL or from the trending markets response abov
 
 Returns full market info with link to Polymarket.
 
-### 3. Check Wallet Status
+### 3. Check wallet status
 ```
 What's my PolyClaw wallet balance?
 ```
 Shows address, POL balance (for gas), and USDC.e balance.
 
-### 4. Direct Trading
+### 4. Direct trading
 If you have your own conviction on a market:
 ```
 Buy $50 YES on market <market_id>
 ```
 Executes split + CLOB flow and records position.
 
-### 5. Hedge Discovery Flow
+### 5. Hedge discovery flow
 Find LLM-analyzed arbitrage opportunities:
 ```
 Find me some hedging opportunities on Polymarket
@@ -145,20 +145,20 @@ Run hedge scan limit 10
 
 Review the results — you'll see coverage tiers (T1 = 95%+, T2 = 90-95%, T3 = 85-90%) and the market pairs where you can take hedged positions.
 
-### 6. Check Positions
+### 6. Check positions
 ```
 Show my PolyClaw positions
 ```
 Lists open positions with entry price, current price, and P&L.
 
-### 7. Sell Early
+### 7. Sell early
 To exit a position before the market resolves:
 ```
 Sell my YES position on market <market_id>
 ```
 Sells your tokens on the CLOB order book at current market price.
 
-### Full Flow Example
+### Full flow example
 
 1. **"What's trending on Polymarket?"** → Get market IDs
 2. **"Run hedge scan limit 10"** → Wait for LLM analysis
@@ -167,7 +167,7 @@ Sells your tokens on the CLOB order book at current market price.
 5. **"Buy $25 NO on market xyz789"** → Take position on covering market
 6. **"Show my PolyClaw positions"** → Verify entries and track P&L
 
-## Environment Variables
+## Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -177,7 +177,7 @@ Sells your tokens on the CLOB order book at current market price.
 | `HTTPS_PROXY` | Recommended | Rotating residential proxy for CLOB API |
 | `CLOB_MAX_RETRIES` | No | Max retries for CLOB orders (default: 5) |
 
-## Directory Structure
+## Directory structure
 
 ```
 polyclaw/
@@ -204,7 +204,7 @@ polyclaw/
     └── wallet_manager.py        # Wallet lifecycle
 ```
 
-## Trading Flow
+## Trading flow
 
 1. **Set approvals** (one-time): `polyclaw wallet approve`
 2. **Execute trade**: `polyclaw buy <market_id> YES 50`
@@ -213,7 +213,7 @@ polyclaw/
    - Result: 50 YES tokens, net cost ~$35
 3. **Track position**: `polyclaw positions`
 
-### Understanding the Split Mechanism
+### Understanding the split mechanism
 
 Polymarket uses a **Conditional Token Framework (CTF)**. You can't directly "buy YES tokens" — instead:
 
@@ -228,7 +228,7 @@ Sell:   2 NO tokens @ $0.35 → recover ~$0.70
 Net:    Paid ~$1.30 for 2 YES tokens (effective price: $0.65)
 ```
 
-### CLOB Order IDs
+### CLOB order IDs
 
 When you execute a trade, the CLOB sell returns an **order ID** like:
 ```
@@ -257,7 +257,7 @@ order = client.get_order("0xc93d6214...")
 
 **Note:** There's no public explorer for CLOB order IDs. To view your trade history, connect your wallet at polymarket.com → Portfolio → Activity.
 
-## Hedge Discovery Flow
+## Hedge discovery flow
 
 1. **Scan markets**: `polyclaw hedge scan --query "election"`
 2. **Review output**: Table shows Tier, Coverage, Cost, Target, Cover
@@ -270,7 +270,7 @@ order = client.get_order("0xc93d6214...")
 - **Tier 3 (MODERATE):** 85-90% — decent but noticeable risk
 - **Tier 4 (LOW):** <85% — speculative (filtered by default)
 
-## Polymarket Contracts (Polygon Mainnet)
+## Polymarket contracts (Polygon mainnet)
 
 | Contract | Address |
 |----------|---------|
