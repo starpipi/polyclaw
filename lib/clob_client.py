@@ -201,3 +201,33 @@ class ClobClientWrapper:
             return True
         except Exception:
             return False
+
+    def sell_gtc(
+        self,
+        token_id: str,
+        amount: float,
+        price: float,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        Place GTC (Good Till Cancelled) sell order.
+
+        Args:
+            token_id: Token ID to sell
+            amount: Amount of tokens to sell
+            price: Price per token
+
+        Returns:
+            Tuple of (order_id, error_message)
+        """
+        try:
+            from py_clob_client.clob_types import OrderArgs, OrderType
+            from py_clob_client.order_builder.constants import SELL
+
+            order = self.client.create_order(
+                OrderArgs(token_id=token_id, price=round(price, 2), size=amount, side=SELL)
+            )
+            result = self.client.post_order(order, OrderType.GTC)
+            order_id = result.get("orderID", str(result)[:40])
+            return order_id, None
+        except Exception as e:
+            return None, str(e)
