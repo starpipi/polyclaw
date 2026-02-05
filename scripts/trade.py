@@ -218,7 +218,19 @@ class TradeExecutor:
                 if clob_filled:
                     print(f"CLOB sell filled: {clob_order_id}")
                 else:
-                    print(f"CLOB sell failed: {clob_error}")
+                    # If FOK failed, try GTC
+                    print(f"CLOB FOK sell failed. Attempting GTC sell...")
+                    clob_order_id, clob_error = clob.sell_gtc(
+                        unwanted_token,
+                        amount,
+                        unwanted_price * 0.95 # Offer slightly lower for GTC sell
+                    )
+                    if clob_order_id:
+                        print(f"CLOB GTC sell order placed: {clob_order_id}")
+                        clob_filled = False # Not immediately filled, it's an open order
+                    else:
+                        print(f"CLOB GTC sell also failed: {clob_error}")
+
             except Exception as e:
                 clob_error = str(e)
                 print(f"CLOB error: {clob_error}")
