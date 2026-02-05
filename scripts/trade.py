@@ -92,7 +92,7 @@ class TradeExecutor:
                 "from": address,
                 "nonce": w3.eth.get_transaction_count(address),
                 "gas": 300000,
-                "gasPrice": w3.eth.gas_price,
+                "gasPrice": int(w3.eth.gas_price * 1.1), # Increase gas price by 10% for better reliability
                 "chainId": POLYGON_CHAIN_ID,
             }
         )
