@@ -134,6 +134,9 @@ class WalletManager:
         MAX_UINT256 = 2**256 - 1
         tx_hashes = []
 
+        # Get the initial nonce once before sending multiple transactions
+        current_nonce = w3.eth.get_transaction_count(address)
+
         approvals = [
             (usdc, "approve", CONTRACTS["CTF"], MAX_UINT256),
             (usdc, "approve", CONTRACTS["CTF_EXCHANGE"], MAX_UINT256),
@@ -148,7 +151,7 @@ class WalletManager:
             tx = fn(Web3.to_checksum_address(spender), value).build_transaction(
                 {
                     "from": address,
-                    "nonce": w3.eth.get_transaction_count(address),
+                    "nonce": current_nonce, # Use the current_nonce
                     "gas": 100000,
                     "gasPrice": w3.eth.gas_price,
                     "chainId": POLYGON_CHAIN_ID,
@@ -163,5 +166,6 @@ class WalletManager:
                 raise ValueError(f"Approval failed: {tx_hash.hex()}")
 
             tx_hashes.append(tx_hash.hex())
+            current_nonce += 1 # Increment nonce for the next transaction
 
         return tx_hashes
