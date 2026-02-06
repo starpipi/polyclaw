@@ -45,8 +45,6 @@ class PositionEntry:
     # Status
     status: str = "open"  # open, closed, resolved
     notes: Optional[str] = None
-    decision_reasoning: Optional[str] = None # Agent's reasoning for the trade
-    external_info_summary: Optional[str] = None # Summary of external info used for decision
 
 
 class PositionStorage:
