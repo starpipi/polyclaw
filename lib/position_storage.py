@@ -43,7 +43,7 @@ class PositionEntry:
     clob_filled: bool = False
 
     # Status
-    status: str = "open"  # open, closed, resolved
+    status: str = "open"  # open, closed, resolved, redeemed
     notes: Optional[str] = None
 
 
