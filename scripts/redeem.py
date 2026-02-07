@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
-"""Redeem settled positions - claim winnings from resolved markets."""
+"""Redeem settled positions - claim winnings from resolved markets.
 
+Supports two scan modes:
+  - Local: scans positions.json for open positions (default)
+  - On-chain: queries Polymarket Data API for all redeemable positions in wallet (--onchain)
+"""
+
+import os
 import sys
 import json
 import asyncio
@@ -17,12 +23,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+import httpx
 from web3 import Web3
 
 from lib.wallet_manager import WalletManager
 from lib.gamma_client import GammaClient, Market
 from lib.contracts import CONTRACTS, CTF_ABI, POLYGON_CHAIN_ID
 from lib.position_storage import PositionStorage
+
+
+POLYMARKET_DATA_API = "https://data-api.polymarket.com"
 
 
 @dataclass
@@ -79,8 +89,137 @@ class RedeemExecutor:
         except Exception:
             return False
 
+    def _get_http_proxy(self) -> Optional[str]:
+        """Get proxy from environment if available."""
+        return os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+
+    async def scan_redeemable_onchain(self) -> list[dict]:
+        """Scan wallet via Polymarket Data API for all redeemable positions.
+
+        This does NOT depend on local positions.json - it queries the
+        Polymarket Data API directly for any redeemable tokens in the wallet.
+        """
+        address = self.wallet.address
+        if not address:
+            return []
+
+        proxy = self._get_http_proxy()
+        redeemable = []
+        offset = 0
+        limit = 100
+
+        print(f"Querying Polymarket Data API for wallet {address[:10]}...")
+
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            proxy=proxy,
+        ) as http:
+            # Fetch all redeemable positions from Data API
+            while True:
+                resp = await http.get(
+                    f"{POLYMARKET_DATA_API}/positions",
+                    params={
+                        "user": address,
+                        "redeemable": "true",
+                        "sizeThreshold": "0",
+                        "limit": limit,
+                        "offset": offset,
+                    },
+                )
+                resp.raise_for_status()
+                batch = resp.json()
+
+                if not batch:
+                    break
+
+                for item in batch:
+                    condition_id = item.get("conditionId") or item.get("market", "")
+                    title = item.get("title", "Unknown market")
+                    size = float(item.get("size", 0))
+                    outcome = item.get("outcome", "")
+                    asset = item.get("asset", "")
+
+                    if size <= 0:
+                        continue
+
+                    redeemable.append({
+                        "position_id": f"onchain-{condition_id[:8]}",
+                        "market_id": condition_id,
+                        "question": title,
+                        "position": outcome.upper() if outcome else "UNKNOWN",
+                        "token_id": asset,
+                        "condition_id": condition_id,
+                        "is_winner": True,
+                        "redeemable_usd": size,
+                        "on_chain_balance": int(size * 1e6),
+                        "market_outcome": outcome.upper() if outcome else "",
+                        "source": "data_api",
+                    })
+
+                if len(batch) < limit:
+                    break
+                offset += limit
+
+        # Also fetch mergeable positions
+        offset = 0
+        async with httpx.AsyncClient(
+            timeout=30.0,
+            proxy=proxy,
+        ) as http:
+            while True:
+                resp = await http.get(
+                    f"{POLYMARKET_DATA_API}/positions",
+                    params={
+                        "user": address,
+                        "mergeable": "true",
+                        "sizeThreshold": "0",
+                        "limit": limit,
+                        "offset": offset,
+                    },
+                )
+                resp.raise_for_status()
+                batch = resp.json()
+
+                if not batch:
+                    break
+
+                for item in batch:
+                    condition_id = item.get("conditionId") or item.get("market", "")
+                    # Skip if already in redeemable list
+                    if any(r["market_id"] == condition_id for r in redeemable):
+                        continue
+
+                    title = item.get("title", "Unknown market")
+                    size = float(item.get("size", 0))
+                    outcome = item.get("outcome", "")
+                    asset = item.get("asset", "")
+
+                    if size <= 0:
+                        continue
+
+                    redeemable.append({
+                        "position_id": f"onchain-{condition_id[:8]}",
+                        "market_id": condition_id,
+                        "question": title,
+                        "position": outcome.upper() if outcome else "UNKNOWN",
+                        "token_id": asset,
+                        "condition_id": condition_id,
+                        "is_winner": True,
+                        "redeemable_usd": size,
+                        "on_chain_balance": int(size * 1e6),
+                        "market_outcome": outcome.upper() if outcome else "",
+                        "source": "data_api",
+                    })
+
+                if len(batch) < limit:
+                    break
+                offset += limit
+
+        print(f"  Found {len(redeemable)} redeemable position(s) via Data API.")
+        return redeemable
+
     async def scan_redeemable(self) -> list[dict]:
-        """Scan all open positions and find ones that are settled and winning."""
+        """Scan local positions.json for open positions that are settled and winning."""
         storage = PositionStorage()
         positions = storage.get_open()
 
@@ -115,6 +254,7 @@ class RedeemExecutor:
                         "is_winner": False,
                         "on_chain_balance": 0,
                         "redeemable_usd": 0,
+                        "source": "local",
                     })
                     continue
 
@@ -140,12 +280,39 @@ class RedeemExecutor:
                     "on_chain_balance": balance,
                     "redeemable_usd": balance_human,
                     "condition_id": market.condition_id,
+                    "source": "local",
                 })
             except Exception as e:
                 print(f"  Warning: Failed to check {pos['position_id'][:8]}: {e}")
                 continue
 
         return redeemable
+
+    async def scan_all(self) -> list[dict]:
+        """Combined scan: local positions.json + on-chain Data API.
+
+        Merges results, deduplicating by condition_id.
+        """
+        # Scan both sources
+        local = await self.scan_redeemable()
+        onchain = await self.scan_redeemable_onchain()
+
+        # Merge: local records take priority (they have more metadata)
+        seen_conditions = set()
+        merged = []
+
+        for item in local:
+            cid = item.get("condition_id", item.get("market_id", ""))
+            seen_conditions.add(cid)
+            merged.append(item)
+
+        for item in onchain:
+            cid = item.get("condition_id", item.get("market_id", ""))
+            if cid not in seen_conditions:
+                seen_conditions.add(cid)
+                merged.append(item)
+
+        return merged
 
     def redeem_position(
         self,
@@ -186,10 +353,14 @@ class RedeemExecutor:
         print(f"  Redeem confirmed in block {receipt['blockNumber']}")
         return tx_hash.hex()
 
-    async def redeem_all(self, dry_run: bool = False) -> list[RedeemResult]:
+    async def redeem_all(self, dry_run: bool = False, onchain: bool = False) -> list[RedeemResult]:
         """Scan and redeem all settled winning positions."""
-        print("Scanning for redeemable positions...")
-        redeemable = await self.scan_redeemable()
+        if onchain:
+            print("Scanning via Polymarket Data API (on-chain mode)...")
+            redeemable = await self.scan_all()
+        else:
+            print("Scanning local positions...")
+            redeemable = await self.scan_redeemable()
 
         if not redeemable:
             print("No redeemable positions found.")
@@ -242,10 +413,10 @@ class RedeemExecutor:
                     index_sets=[1, 2],
                 )
 
-                # Update position status
-                storage.update_status(pos["position_id"], "redeemed")
-                # Store redeem info in notes
-                storage.update_notes(
+                # Update position status (only for local records)
+                if pos.get("source") != "data_api":
+                    storage.update_status(pos["position_id"], "redeemed")
+                    storage.update_notes(
                     pos["position_id"],
                     f"Redeemed ${pos['redeemable_usd']:.2f} | TX: {tx_hash} | {datetime.now(timezone.utc).isoformat()}"
                 )
@@ -275,9 +446,10 @@ class RedeemExecutor:
                     error=str(e),
                 ))
 
-        # Also mark losers as resolved
+        # Also mark losers as resolved (only for local records)
         for pos in losers:
-            storage.update_status(pos["position_id"], "resolved")
+            if pos.get("source") != "data_api":
+                storage.update_status(pos["position_id"], "resolved")
 
         return results
 
@@ -290,9 +462,14 @@ async def cmd_scan(args):
         print("Set POLYCLAW_PRIVATE_KEY environment variable.")
         return 1
 
+    onchain = getattr(args, "onchain", False)
+
     try:
         executor = RedeemExecutor(wallet)
-        redeemable = await executor.scan_redeemable()
+        if onchain:
+            redeemable = await executor.scan_all()
+        else:
+            redeemable = await executor.scan_redeemable()
 
         if not redeemable:
             print("No settled positions found.")
@@ -337,7 +514,8 @@ async def cmd_execute(args):
 
     try:
         executor = RedeemExecutor(wallet)
-        results = await executor.redeem_all(dry_run=args.dry_run)
+        onchain = getattr(args, "onchain", False)
+        results = await executor.redeem_all(dry_run=args.dry_run, onchain=onchain)
 
         if not results:
             return 0
@@ -375,12 +553,20 @@ def main():
 
     # Scan
     scan_parser = subparsers.add_parser("scan", help="Scan for redeemable positions")
+    scan_parser.add_argument(
+        "--onchain", action="store_true",
+        help="Scan wallet via Polymarket Data API (finds positions not in local records)"
+    )
 
     # Execute
     exec_parser = subparsers.add_parser("execute", help="Redeem all settled winning positions")
     exec_parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would be redeemed without executing"
+    )
+    exec_parser.add_argument(
+        "--onchain", action="store_true",
+        help="Scan wallet via Polymarket Data API (finds positions not in local records)"
     )
 
     args = parser.parse_args()
@@ -392,6 +578,7 @@ def main():
     else:
         # Default to scan
         args.json = False
+        args.onchain = False
         return asyncio.run(cmd_scan(args))
 
 
